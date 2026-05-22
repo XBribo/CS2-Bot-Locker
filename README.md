@@ -1,4 +1,4 @@
-# CS2-BotWeaponLock
+# CS2-Bot-WeaponLock
 
 Metamod:Source native plugin. Locks a CS2 bot to a weapon slot and blocks the AI from switching away.
 
@@ -33,8 +33,8 @@ cmake --build build --config Release
 ## Console Commands
 
 ```
-blw_lock <slot> <slot1|slot2|slot3|slot4|slot5>
-blw_unlock <slot>
+blw_lock <id> <slot1|slot2|slot3|slot4|slot5>
+blw_unlock <id>
 blw_unlock_all
 blw_status
 ```
@@ -47,10 +47,10 @@ Drop `scripts/BotWeaponLock.NativeApi.cs` into your project.
 using BotWeaponLockApi;
 
 BotWeaponLock.IsCompatible();              // bool, check on load
-BotWeaponLock.Lock(slot, LockTarget.Slot3);// bool
-BotWeaponLock.Unlock(slot);                // bool
+BotWeaponLock.Lock(id, LockTarget.Slot3);// bool
+BotWeaponLock.Unlock(id);                // bool
 BotWeaponLock.UnlockAll();                 // void
-BotWeaponLock.GetLock(slot);               // LockTarget
+BotWeaponLock.GetLock(id);               // LockTarget
 ```
 
 Main thread only.
