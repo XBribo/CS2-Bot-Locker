@@ -5,7 +5,7 @@ Metamod:Source native plugin. Locks a CS2 bot to a weapon slot and blocks the AI
 **Version**: 0.1.2
 **Native ABI**: 2
 
-## Slot Map
+## Slot
 
 | Target | Engine | Weapons |
 |---|---|---|
