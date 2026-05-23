@@ -3,7 +3,7 @@
 Metamod:Source native plugin. Two locks for CS2 bots:
 
 - **Weapon lock** — pin a bot to one weapon slot; AI weapon switches are blocked.
-- **Bot lock** — freeze the bot's `CCSBot::Update` tick entirely, so the AI stops driving the bot (used by demo replay to take over movement and aim).
+- **Bot lock** — freeze the bot's `CCSBot::Update` and `CCSBot::Upkeep` tick entirely, so the AI stops driving the bot (used by demo replay to take over movement and aim).
 
 **Version**: 0.2.0
 **Native ABI**: 3
