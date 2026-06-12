@@ -10,8 +10,11 @@
 #include <Windows.h>
 #include <MinHook.h>
 
+#include <tier0/dbg.h>
+
 #include <cstdint>
 #include <cstdio>
+#include <cmath>
 #include <vector>
 
 namespace tg = cs2bl::targets;
@@ -20,6 +23,7 @@ using Update_t = void(__fastcall *)(void *bot);
 using Upkeep_t = void(__fastcall *)(void *bot);
 using Jump_t = char(__fastcall *)(void *bot, char mustJump);
 using UpdateLookAngles_t = void(__fastcall *)(void *bot);
+using SetEyeAngles_t = void(__fastcall *)(void *pawn, float *angle);
 
 namespace BotLocker
 {
@@ -33,6 +37,8 @@ namespace BotLocker
         static void *g_addrJump = nullptr;
         static UpdateLookAngles_t g_origUpdateLookAngles = nullptr;
         static void *g_addrUpdateLookAngles = nullptr;
+        static SetEyeAngles_t g_origSetEyeAngles = nullptr;
+        static void *g_addrSetEyeAngles = nullptr;
         static bool g_installed = false;
         static std::string g_status = "not_attempted";
 
@@ -70,20 +76,24 @@ namespace BotLocker
             g_origUpkeep(bot);
         }
 
-        // Force the bot's view target to the current replay frame
+        // view replay
         static void __fastcall HookedUpdateLookAngles(void *bot)
         {
-            int slot = CCSBotToSlot(bot);
+            g_origUpdateLookAngles(bot);
+        }
+
+        // Engine eye-angle
+        static void __fastcall HookedSetEyeAngles(void *pawn, float *angle)
+        {
+            int slot = pawn ? ControllerSlotForPawn(pawn) : -1;
             ReplayFrame f{};
             if (slot >= 0 && MotionRecorder::CurrentReplayFrame(slot, f))
             {
-                auto *b = reinterpret_cast<char *>(bot);
-                *reinterpret_cast<float *>(b + tg::kBot_LookPitch) = f.pitch;
-                *reinterpret_cast<float *>(b + tg::kBot_LookYaw) = f.yaw;
-                *reinterpret_cast<float *>(b + tg::kBot_LookPitchVel) = 0.0f;
-                *reinterpret_cast<float *>(b + tg::kBot_LookYawVel) = 0.0f;
+                float a[3] = {f.pitch, f.yaw, 0.0f};
+                g_origSetEyeAngles(pawn, a);
+                return;
             }
-            g_origUpdateLookAngles(bot);
+            g_origSetEyeAngles(pawn, angle);
         }
 
         // Skip Jump under Jump lock; return 0 mimics its own gate-fail.
@@ -190,6 +200,21 @@ namespace BotLocker
                 OutputDebugStringA(dbg);
             }
 
+            // SetEyeAngles is optional; without it replay view falls back to
+            // the (smoothing) UpdateLookAngles hook only.
+            char seaErr[256] = {0};
+            g_addrSetEyeAngles = ResolveSig(gd, serverModule,
+                                            "CCSPlayerPawn::SetEyeAngles",
+                                            seaErr, sizeof(seaErr));
+            if (!g_addrSetEyeAngles)
+            {
+                char dbg[320];
+                std::snprintf(dbg, sizeof(dbg),
+                              "[BotLocker] WARN: CCSPlayerPawn::SetEyeAngles sig not resolved (%s); replay 1:1 view disabled\n",
+                              seaErr);
+                OutputDebugStringA(dbg);
+            }
+
             // MinHook already initialized by WeaponLockerHooks.
             if (MH_CreateHook(g_addrUpdate,
                               reinterpret_cast<void *>(&HookedUpdate),
@@ -280,6 +305,26 @@ namespace BotLocker
                 }
             }
 
+            // SetEyeAngles hook: optional, same tolerant pattern.
+            if (g_addrSetEyeAngles)
+            {
+                if (MH_CreateHook(g_addrSetEyeAngles,
+                                  reinterpret_cast<void *>(&HookedSetEyeAngles),
+                                  reinterpret_cast<void **>(&g_origSetEyeAngles)) != MH_OK)
+                {
+                    OutputDebugStringA("[BotLocker] WARN: MH_CreateHook SetEyeAngles failed; replay 1:1 view disabled\n");
+                    g_origSetEyeAngles = nullptr;
+                    g_addrSetEyeAngles = nullptr;
+                }
+                else if (MH_EnableHook(g_addrSetEyeAngles) != MH_OK)
+                {
+                    OutputDebugStringA("[BotLocker] WARN: MH_EnableHook SetEyeAngles failed; replay 1:1 view disabled\n");
+                    MH_RemoveHook(g_addrSetEyeAngles);
+                    g_origSetEyeAngles = nullptr;
+                    g_addrSetEyeAngles = nullptr;
+                }
+            }
+
             g_installed = true;
             g_status = "ok";
 
@@ -299,6 +344,12 @@ namespace BotLocker
         {
             if (!g_installed)
                 return;
+            if (g_addrSetEyeAngles)
+            {
+                MH_DisableHook(g_addrSetEyeAngles);
+                MH_RemoveHook(g_addrSetEyeAngles);
+                g_origSetEyeAngles = nullptr;
+            }
             if (g_addrUpdateLookAngles)
             {
                 MH_DisableHook(g_addrUpdateLookAngles);

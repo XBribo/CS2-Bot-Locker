@@ -37,7 +37,7 @@
       "windows": "40 55 56 57 41 55 48 8D AC 24 ? ? ? ? 48 81 EC ? ? ? ? 48 8D 05",
       "linux": ""
     },
-    "comment": "Bot: per-tick decision entry; PathFollower + look-around + reaction + weapon."
+    "comment": "Per-tick decision entry; PathFollower + look-around + reaction + weapon."
   },
   "CCSBot::Upkeep": {
     "signatures": {
@@ -45,7 +45,7 @@
       "windows": "40 53 57 41 54 48 81 EC",
       "linux": ""
     },
-    "comment": "Bot: per-frame view mBotntenance; UpdateLookAround + jitter + UpdateLookAngles."
+    "comment": "Per-frame view mBotntenance; UpdateLookAround + jitter + UpdateLookAngles."
   },
   "CCSBot::Jump": {
     "signatures": {
@@ -53,7 +53,7 @@
       "windows": "48 89 5C 24 ? 57 48 83 EC ? 48 8B D9 0F B6 FA 48 8B 49 ? 48 8B 91",
       "linux": ""
     },
-    "comment": "Bot: bot requests a jump."
+    "comment": "Bot requests a jump."
   },
   "CCSBot::UpdateLookAngles": {
     "signatures": {
@@ -61,7 +61,15 @@
       "windows": "40 55 53 56 57 48 8D 6C 24 ? 48 81 EC ? ? ? ? 48 8D 05",
       "linux": ""
     },
-    "comment": "Bot: spring-smooths view to m_lookPitch/m_lookYaw."
+    "comment": "Spring-smooths view to m_lookPitch/m_lookYaw."
+  },
+  "CCSPlayerPawn::SetEyeAngles": {
+    "signatures": {
+      "library": "server",
+      "windows": "48 89 5C 24 ? 48 89 74 24 ? 48 89 7C 24 ? 55 48 8D 6C 24 ? 48 81 EC ? ? ? ? 48 8B DA 48 8B F1 48 8D 55",
+      "linux": ""
+    },
+    "comment": "Engine eye-angle."
   },
   "CCSPlayer_MovementServices::ProcessUsercmd": {
     "signatures": {

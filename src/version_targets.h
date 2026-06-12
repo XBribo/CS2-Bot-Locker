@@ -13,11 +13,12 @@ namespace cs2bl::targets
     inline constexpr int kBot_AiTickedFlag = 21196;
     // CCSBot -> pawn (CCSPlayerPawn*)
     inline constexpr int kBot_Pawn = 0x18;
-    // Look-angle target fields
-    inline constexpr int kBot_LookPitch = 0x5994;
-    inline constexpr int kBot_LookPitchVel = 0x5998;
-    inline constexpr int kBot_LookYaw = 0x599C;
-    inline constexpr int kBot_LookYawVel = 0x59A0;
+    // Look-angle spring targets (m_lookPitch/m_lookYaw) + their velocities,
+    // as read by CCSBot::UpdateLookAngles. Unused by 1:1 view replay.
+    inline constexpr int kBot_LookPitch = 0x5974;
+    inline constexpr int kBot_LookPitchVel = 0x5978;
+    inline constexpr int kBot_LookYaw = 0x597C;
+    inline constexpr int kBot_LookYawVel = 0x5980;
 
     // ---- CBaseEntity / CEntityIdentity ----
 
@@ -40,8 +41,11 @@ namespace cs2bl::targets
     inline constexpr int kPawn_Controller = 0xB80;
     // m_hOriginalController (CHandle)
     inline constexpr int kPawn_OriginalController = 0xB84;
-    // v_angle
+    // CCSPlayerPawn -> v_angle (QAngle)
     inline constexpr int kPawn_ViewAngle = 0xAB8;
+    // CCSPlayerPawn vtable byte offset of GetEyeAngles(QAngle &out); from
+    // UpdateLookAngles decomp (vtable+1504). Index = 1504/8 = 188.
+    inline constexpr int kPawnVt_GetEyeAngles = 1504;
 
     // ---- CCSPlayer_WeaponServices ----
 

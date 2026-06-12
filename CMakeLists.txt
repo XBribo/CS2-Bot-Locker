@@ -131,5 +131,5 @@ set_target_properties(BotLocker PROPERTIES OUTPUT_NAME "BotLocker" PREFIX "" SUF
 
 if(MSVC)
     target_compile_options(BotLocker PRIVATE
-        /W3 /permissive- /wd4819 /wd4267 /wd4244 /wd4146 /wd4996 /wd4661)
+        /utf-8 /W3 /permissive- /wd4819 /wd4267 /wd4244 /wd4146 /wd4996 /wd4661)
 endif()
