@@ -7,158 +7,164 @@
 #include <cstdint>
 #include <vector>
 
-extern "C" __declspec(dllexport)
-int BotLocker_Lock(int slot, int kind, int arg)
+extern "C" __declspec(dllexport) int BotLocker_Lock(int slot, int kind, int arg)
 {
     return BotLocker::Dispatch::Lock(slot,
-        static_cast<BotLocker::LockKind>(kind), arg, /*quiet=*/true);
+                                     static_cast<BotLocker::LockKind>(kind), arg, /*quiet=*/true);
 }
 
-extern "C" __declspec(dllexport)
-int BotLocker_Unlock(int slot, int kind)
+extern "C" __declspec(dllexport) int BotLocker_Unlock(int slot, int kind)
 {
     return BotLocker::Dispatch::Unlock(slot,
-        static_cast<BotLocker::LockKind>(kind), /*quiet=*/true);
+                                       static_cast<BotLocker::LockKind>(kind), /*quiet=*/true);
 }
 
-extern "C" __declspec(dllexport)
-int BotLocker_UnlockAll(int kind)
+extern "C" __declspec(dllexport) int BotLocker_UnlockAll(int kind)
 {
     return BotLocker::Dispatch::UnlockAll(
         static_cast<BotLocker::LockKind>(kind), /*quiet=*/true);
 }
 
-extern "C" __declspec(dllexport)
-int BotLocker_IsLocked(int slot, int kind)
+extern "C" __declspec(dllexport) int BotLocker_IsLocked(int slot, int kind)
 {
     return BotLocker::Dispatch::IsLocked(slot,
-        static_cast<BotLocker::LockKind>(kind));
+                                         static_cast<BotLocker::LockKind>(kind));
 }
 
 // Set per-slot injected input. Engine pmove runs with these values until cleared.
-extern "C" __declspec(dllexport)
-int BotLocker_InjectUserCmd(int      slot,
-                            uint64_t buttons,
-                            float    forwardMove,
-                            float    sideMove,
-                            float    upMove,
-                            float    pitch,
-                            float    yaw)
+extern "C" __declspec(dllexport) int BotLocker_InjectUserCmd(int slot,
+                                                             uint64_t buttons,
+                                                             float forwardMove,
+                                                             float sideMove,
+                                                             float upMove,
+                                                             float pitch,
+                                                             float yaw)
 {
     BotLocker::InjectedInput in{buttons, forwardMove, sideMove, upMove, pitch, yaw};
     return BotLocker::InputInjector::SetInput(slot, in) ? 0 : -1;
 }
 
 // Stop injecting for one slot. Engine resumes its own UserCmd.
-extern "C" __declspec(dllexport)
-int BotLocker_ClearInjection(int slot)
+extern "C" __declspec(dllexport) int BotLocker_ClearInjection(int slot)
 {
     return BotLocker::InputInjector::ClearInput(slot) ? 0 : -1;
 }
 
 // Stop injecting for every slot at once.
-extern "C" __declspec(dllexport)
-int BotLocker_ClearAllInjections()
+extern "C" __declspec(dllexport) int BotLocker_ClearAllInjections()
 {
     BotLocker::InputInjector::ClearAll();
     return 0;
 }
 
-extern "C" __declspec(dllexport)
-int BotLocker_GetVersion()
+extern "C" __declspec(dllexport) int BotLocker_GetVersion()
 {
-    return 8;
+    return 9;
 }
 
-// ---- Motion recording & replay (ABI 8: ReplayFrame gained velX/Y/Z) ----
+// ---- Motion recording & replay ----
 
-// Begin/stop recording a human slot's per-tick input. 0 ok / -1 fail.
-extern "C" __declspec(dllexport)
-int BotLocker_StartRecord(int slot)
+// Begin/stop recording a human slot's per-tick movement. 0 ok / -1 fail.
+extern "C" __declspec(dllexport) int BotLocker_StartRecord(int slot)
 {
     return BotLocker::MotionRecorder::StartRecord(slot) ? 0 : -1;
 }
 
-extern "C" __declspec(dllexport)
-int BotLocker_StopRecord(int slot)
+extern "C" __declspec(dllexport) int BotLocker_StopRecord(int slot)
 {
     return BotLocker::MotionRecorder::StopRecord(slot) ? 0 : -1;
 }
 
-// Number of frames currently recorded for a slot. <0 on bad slot.
-extern "C" __declspec(dllexport)
-int BotLocker_GetRecordedFrameCount(int slot)
+// Recorded tick / subtick counts for a slot. <0 on bad slot.
+extern "C" __declspec(dllexport) int BotLocker_GetRecordedTickCount(int slot)
 {
-    return BotLocker::MotionRecorder::RecordedFrameCount(slot);
+    return BotLocker::MotionRecorder::RecordedTickCount(slot);
 }
 
-// Copy recorded frames into caller buffer (C# passes a ReplayFrame[] pointer
-// and its capacity). Returns frames written.
-extern "C" __declspec(dllexport)
-int BotLocker_CopyRecordedFrames(int slot, BotLocker::ReplayFrame *out, int maxFrames)
+extern "C" __declspec(dllexport) int BotLocker_GetRecordedSubtickCount(int slot)
 {
-    return BotLocker::MotionRecorder::CopyFrames(slot, out, maxFrames);
+    return BotLocker::MotionRecorder::RecordedSubtickCount(slot);
 }
 
-// Load a frame array into a slot's replay buffer (internally copied). 0 ok.
-extern "C" __declspec(dllexport)
-int BotLocker_LoadReplay(int slot, const BotLocker::ReplayFrame *frames, int count)
+// Copy recorded ticks / subticks into caller buffers. Returns count written.
+extern "C" __declspec(dllexport) int BotLocker_CopyRecordedTicks(int slot, BotLocker::ReplayTick *out, int maxTicks)
 {
-    return BotLocker::MotionRecorder::LoadReplay(slot, frames, count) ? 0 : -1;
+    return BotLocker::MotionRecorder::CopyTicks(slot, out, maxTicks);
 }
 
-// Move a slot's just-recorded buffer into another slot's replay buffer
-// without going through the managed side (console-only verification path).
-extern "C" __declspec(dllexport)
-int BotLocker_TransferRecordingToReplay(int srcSlot, int dstSlot)
+extern "C" __declspec(dllexport) int BotLocker_CopyRecordedSubticks(int slot, BotLocker::SubtickMove *out, int maxSubticks)
 {
-    int n = BotLocker::MotionRecorder::RecordedFrameCount(srcSlot);
-    if (n <= 0) return -1;
-    std::vector<BotLocker::ReplayFrame> tmp(n);
-    int got = BotLocker::MotionRecorder::CopyFrames(srcSlot, tmp.data(), n);
-    if (got <= 0) return -1;
-    return BotLocker::MotionRecorder::LoadReplay(dstSlot, tmp.data(), got) ? 0 : -1;
+    return BotLocker::MotionRecorder::CopySubticks(slot, out, maxSubticks);
 }
 
-extern "C" __declspec(dllexport)
-int BotLocker_StartReplay(int slot, int loop)
+// Load parallel tick + subtick arrays into a slot's replay buffer. 0 ok.
+extern "C" __declspec(dllexport) int BotLocker_LoadReplay(int slot,
+                                                          const BotLocker::ReplayTick *ticks, int tickCount,
+                                                          const BotLocker::SubtickMove *subs, int subCount)
+{
+    return BotLocker::MotionRecorder::LoadReplay(slot, ticks, tickCount,
+                                                 subs, subCount)
+               ? 0
+               : -1;
+}
+
+// Move a slot's just-recorded buffers into another slot's replay buffer
+extern "C" __declspec(dllexport) int BotLocker_TransferRecordingToReplay(int srcSlot, int dstSlot)
+{
+    int nt = BotLocker::MotionRecorder::RecordedTickCount(srcSlot);
+    if (nt <= 0)
+        return -1;
+    int ns = BotLocker::MotionRecorder::RecordedSubtickCount(srcSlot);
+    if (ns < 0)
+        ns = 0;
+    std::vector<BotLocker::ReplayTick> ticks(nt);
+    std::vector<BotLocker::SubtickMove> subs(ns > 0 ? ns : 1);
+    int gotT = BotLocker::MotionRecorder::CopyTicks(srcSlot, ticks.data(), nt);
+    int gotS = ns > 0
+                   ? BotLocker::MotionRecorder::CopySubticks(srcSlot, subs.data(), ns)
+                   : 0;
+    if (gotT <= 0)
+        return -1;
+    return BotLocker::MotionRecorder::LoadReplay(
+               dstSlot, ticks.data(), gotT, subs.data(), gotS)
+               ? 0
+               : -1;
+}
+
+extern "C" __declspec(dllexport) int BotLocker_StartReplay(int slot, int loop)
 {
     return BotLocker::MotionRecorder::StartReplay(slot, loop != 0) ? 0 : -1;
 }
 
-extern "C" __declspec(dllexport)
-int BotLocker_StopReplay(int slot)
+extern "C" __declspec(dllexport) int BotLocker_StopReplay(int slot)
 {
     return BotLocker::MotionRecorder::StopReplay(slot) ? 0 : -1;
 }
 
-// Current replay frame index, or <0 if the slot is not replaying.
-extern "C" __declspec(dllexport)
-int BotLocker_GetReplayCursor(int slot)
+// Current replay tick index, or <0 if the slot is not replaying.
+extern "C" __declspec(dllexport) int BotLocker_GetReplayCursor(int slot)
 {
     return BotLocker::MotionRecorder::ReplayCursor(slot);
 }
 
-// Total frames loaded in a slot's replay buffer.
-extern "C" __declspec(dllexport)
-int BotLocker_GetReplayTotal(int slot)
+// Total ticks loaded in a slot's replay buffer.
+extern "C" __declspec(dllexport) int BotLocker_GetReplayTotal(int slot)
 {
     return BotLocker::MotionRecorder::ReplayTotal(slot);
 }
 
-// Copy the frame currently being replayed (for C# to drive view/fire/weapon).
+// Copy the tick currently being replayed (for C# to drive weapon/fire).
 // Returns 0 on success, -1 if the slot isn't replaying.
-extern "C" __declspec(dllexport)
-int BotLocker_GetReplayFrame(int slot, BotLocker::ReplayFrame *out)
+extern "C" __declspec(dllexport) int BotLocker_GetReplayTick(int slot, BotLocker::ReplayTick *out)
 {
-    if (!out) return -1;
-    return BotLocker::MotionRecorder::CurrentReplayFrame(slot, *out) ? 0 : -1;
+    if (!out)
+        return -1;
+    return BotLocker::MotionRecorder::CurrentReplayTick(slot, *out) ? 0 : -1;
 }
 
-// Switch a bot to the weapon with this def index (kKnifeDef=9001 = its knife).
+// Switch a bot to the weapon with this def index
 // Returns 0 ok / -1 not found or bot not ready.
-extern "C" __declspec(dllexport)
-int BotLocker_SwitchBotWeapon(int slot, int defIndex)
+extern "C" __declspec(dllexport) int BotLocker_SwitchBotWeapon(int slot, int defIndex)
 {
     return BotLocker::MotionRecorder::SwitchBotWeaponByDef(slot, defIndex) ? 0 : -1;
 }

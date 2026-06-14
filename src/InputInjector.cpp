@@ -1,4 +1,9 @@
-// ProcessUsercmd hook
+// CS2 movement hooks
+// ProcessMovement (record + apply pre)
+// FinishMove (replay post into MoveData + commit)
+// PlayerRunCommand(subtick record + re-inject)
+
+#include "playercommand.h"
 
 #include "InputInjector.h"
 #include "ccsbot_slot.h"
@@ -17,7 +22,10 @@
 
 namespace tg = cs2bl::targets;
 
-using ProcessUsercmd_t = void(__fastcall *)(void *services, void *cmd);
+using ProcessMovement_t = void(__fastcall *)(void *services, void *moveData);
+using FinishMove_t = void(__fastcall *)(void *services, void *cmd, void *moveData);
+using PlayerRunCommand_t = void(__fastcall *)(void *services, void *cmd);
+using PhysicsSimulate_t = void(__fastcall *)(void *controller);
 
 namespace BotLocker
 {
@@ -30,15 +38,26 @@ namespace BotLocker
         };
 
         static std::array<SlotState, kMaxSlots> g_slots;
-        static ProcessUsercmd_t g_origProcessUsercmd = nullptr;
 
-        // Per-slot diagnostic snapshot, written at the end of each hook tick.
-        static std::array<PawnSnapshot, kMaxSlots> g_snap{};
-        static void *g_addrProcessUsercmd = nullptr;
+        static ProcessMovement_t g_origProcessMovement = nullptr;
+        static FinishMove_t g_origFinishMove = nullptr;
+        static PlayerRunCommand_t g_origPlayerRunCommand = nullptr;
+        static PhysicsSimulate_t g_origPhysicsSimulate = nullptr;
+
+        static void *g_addrProcessMovement = nullptr;
+        static void *g_addrFinishMove = nullptr;
+        static void *g_addrPlayerRunCommand = nullptr;
+        static void *g_addrPhysicsSimulate = nullptr;
         static bool g_installed = false;
+        // True once PhysicsSimulate is hooked
+        static bool g_physicsActive = false;
+        // True once PlayerRunCommand is hooked
+        static bool g_subtickActive = false;
         static std::string g_status = "not_attempted";
 
-        // Diagnostics: total hook fires and the last slot we resolved.
+        // slot -> live CCSPlayer_MovementServices*
+        static std::array<std::atomic<void *>, kMaxSlots> g_slotServices{};
+
         static std::atomic<uint64_t> g_hookCalls{0};
         static std::atomic<int> g_lastSlot{-1};
 
@@ -67,85 +86,235 @@ namespace BotLocker
                 reinterpret_cast<char *>(pawn) + tg::kPawn_WeaponServices);
         }
 
-        // Overwrite buttons/move/view fields.
-        static void __fastcall HookedProcessUsercmd(void *services, void *cmd)
+        // ---- ProcessMovement: record pre/post + manual inject + replay pre ----
+
+        // Defined after HookedFinishMove
+        static void EnsureVtableHooks(void *services);
+
+        static void __fastcall HookedProcessMovement(void *services, void *moveData)
         {
             g_hookCalls.fetch_add(1, std::memory_order_relaxed);
             int slot = ServicesToSlot(services);
             g_lastSlot.store(slot, std::memory_order_relaxed);
 
-            // 1) Capture: if this slot is recording, read the human's real input
-            //    BEFORE any inject/replay overwrites it. Refresh the slot's ws so
-            //    the SelectItem tap can attribute weapon switches to this slot.
-            if (slot >= 0 && slot < kMaxSlots && MotionRecorder::IsRecording(slot))
+            // Lazily hook FinishMove from the live services vtable on first tick.
+            EnsureVtableHooks(services);
+
+            // Cache slot -> services so PhysicsSimulate
+            if (slot >= 0 && slot < kMaxSlots)
+                g_slotServices[slot].store(services, std::memory_order_release);
+
+            bool recording = slot >= 0 && slot < kMaxSlots &&
+                             MotionRecorder::IsRecording(slot);
+            bool replaying = slot >= 0 && slot < kMaxSlots &&
+                             MotionRecorder::IsReplaying(slot);
+
+            // Recording weapon tap
+            if (recording)
             {
                 MotionRecorder::SetLiveWs(slot, ServicesToWeaponServices(services));
-                MotionRecorder::OnTickCapture(slot, services, cmd);
+                if (!g_physicsActive)
+                    MotionRecorder::OnCapturePre(slot, services, moveData);
             }
 
-            // 2) Existing manual inject (bl_inject / BotLocker_InjectUserCmd).
-            if (slot >= 0 && slot < kMaxSlots && g_slots[slot].active.load(std::memory_order_acquire))
+            // Replay: seed CMoveData + pawn with this tick's pre snapshot
+            if (replaying)
+                MotionRecorder::OnReplayPre(slot, services, moveData);
+
+            // Manual inject (bl_inject): override the
+            // MoveData move fields for this tick.
+            if (slot >= 0 && slot < kMaxSlots &&
+                g_slots[slot].active.load(std::memory_order_acquire))
             {
                 const InjectedInput &p = g_slots[slot].input;
                 auto *s = reinterpret_cast<char *>(services);
-
-                // buttons live on MovementServices, not on cmd (CS2 specific).
                 *reinterpret_cast<uint64_t *>(s + tg::kServices_Buttons) = p.buttons;
-
-                if (cmd)
+                if (moveData)
                 {
-                    auto *c = reinterpret_cast<char *>(cmd);
+                    auto *c = reinterpret_cast<char *>(moveData);
                     *reinterpret_cast<float *>(c + tg::kCmd_ForwardMove) = p.forwardMove;
                     *reinterpret_cast<float *>(c + tg::kCmd_SideMove) = p.sideMove;
                     *reinterpret_cast<float *>(c + tg::kCmd_UpMove) = p.upMove;
-                    *reinterpret_cast<float *>(c + tg::kCmd_ViewPitch) = p.pitch;
-                    *reinterpret_cast<float *>(c + tg::kCmd_ViewYaw) = p.yaw;
-                    *reinterpret_cast<float *>(c + tg::kCmd_ViewRoll) = 0.0f;
-                    *reinterpret_cast<float *>(c + tg::kCmd_ViewPitchInput) = p.pitch;
-                    *reinterpret_cast<float *>(c + tg::kCmd_ViewYawInput) = p.yaw;
-                    *reinterpret_cast<float *>(c + tg::kCmd_ViewRollInput) = 0.0f;
                 }
             }
 
-            // 3) Replay apply: overwrites everything above (highest priority).
-            if (slot >= 0 && slot < kMaxSlots)
-                MotionRecorder::OnTickApply(slot, services, cmd);
+            g_origProcessMovement(services, moveData);
 
-            // Diagnostic snapshot: capture the move/view actually fed to the
-            // engine this tick (post-override), then run the original and read
-            // back the resulting velocity/flags from the pawn.
-            if (slot >= 0 && slot < kMaxSlots && cmd)
-            {
-                auto *c = reinterpret_cast<char *>(cmd);
-                PawnSnapshot &sn = g_snap[slot];
-                sn.cmdForward = *reinterpret_cast<float *>(c + tg::kCmd_ForwardMove);
-                sn.cmdSide = *reinterpret_cast<float *>(c + tg::kCmd_SideMove);
-                sn.cmdUp = *reinterpret_cast<float *>(c + tg::kCmd_UpMove);
-                sn.cmdPitch = *reinterpret_cast<float *>(c + tg::kCmd_ViewPitch);
-                sn.cmdYaw = *reinterpret_cast<float *>(c + tg::kCmd_ViewYaw);
-            }
-
-            g_origProcessUsercmd(services, cmd);
-
-            // Post-tick: read the pawn's resulting velocity + ground flags.
-            if (slot >= 0 && slot < kMaxSlots)
-            {
-                void *pawn = *reinterpret_cast<void **>(
-                    reinterpret_cast<char *>(services) + tg::kServices_Pawn);
-                if (pawn)
-                {
-                    auto *p = reinterpret_cast<char *>(pawn);
-                    PawnSnapshot &sn = g_snap[slot];
-                    sn.velX = *reinterpret_cast<float *>(p + tg::kEnt_AbsVelocity + 0);
-                    sn.velY = *reinterpret_cast<float *>(p + tg::kEnt_AbsVelocity + 4);
-                    sn.velZ = *reinterpret_cast<float *>(p + tg::kEnt_AbsVelocity + 8);
-                    sn.flags = *reinterpret_cast<uint32_t *>(p + tg::kEnt_Flags);
-                    sn.valid = true;
-                }
-            }
+            // Recording: commit the tick here only when PhysicsSimulate isn't the boundary
+            // With PhysicsSimulate hooked, the post snapshot + commit happen once per server tick there, not per subtick
+            if (recording && !g_physicsActive)
+                MotionRecorder::OnCapturePost(slot, services, moveData);
         }
 
-        // Resolve a sig from gamedata against the loaded server.dll.
+        // ---- FinishMove: replay post-write + commit ----
+
+        static void __fastcall HookedFinishMove(void *services, void *cmd,
+                                                void *moveData)
+        {
+            int slot = ServicesToSlot(services);
+            bool replaying = slot >= 0 && slot < kMaxSlots &&
+                             MotionRecorder::IsReplaying(slot);
+
+            // Before original: write post snapshot into MoveData + force resync.
+            if (replaying)
+                MotionRecorder::OnReplayFinishMove(slot, services, moveData);
+
+            g_origFinishMove(services, cmd, moveData);
+
+            // After original: commit moveType/flags + advance the replay cursor.
+            // With PhysicsSimulate hooked, cursor++ happens once per server tick there instead
+            if (replaying && !g_physicsActive)
+                MotionRecorder::OnReplayCommit(slot, services);
+        }
+
+        // ---- PlayerRunCommand: subtick record + re-inject ----
+        // we only touch subtick_moves -- never move/view/buttons.
+
+        static void __fastcall HookedPlayerRunCommand(void *services, void *cmd)
+        {
+            int slot = ServicesToSlot(services);
+            bool recording = slot >= 0 && slot < kMaxSlots &&
+                             MotionRecorder::IsRecording(slot);
+            bool replaying = slot >= 0 && slot < kMaxSlots &&
+                             MotionRecorder::IsReplaying(slot);
+
+            if (cmd && (recording || replaying))
+            {
+                // Compiler computes the multiple-inheritance adjust here.
+                auto *pc = reinterpret_cast<PlayerCommand *>(cmd);
+                CBaseUserCmdPB *base = pc->mutable_base();
+
+                if (recording)
+                {
+                    // Read this tick's subtick_moves into SubtickMove[] and
+                    // stash; OnCapturePost (PhysicsSimulate-post) commits them.
+                    int n = base->subtick_moves_size();
+                    if (n > MotionRecorder::kMaxSubtickPerTick)
+                        n = MotionRecorder::kMaxSubtickPerTick;
+                    SubtickMove moves[MotionRecorder::kMaxSubtickPerTick];
+                    for (int i = 0; i < n; ++i)
+                    {
+                        const CSubtickMoveStep &s = base->subtick_moves(i);
+                        moves[i].when = s.when();
+                        moves[i].button = static_cast<uint32_t>(s.button());
+                        moves[i].pressed = s.pressed() ? 1.0f : 0.0f;
+                        moves[i].analogForward = s.analog_forward_delta();
+                        moves[i].analogLeft = s.analog_left_delta();
+                        moves[i].pitchDelta = s.pitch_delta();
+                        moves[i].yawDelta = s.yaw_delta();
+                    }
+                    MotionRecorder::OnCaptureSubticks(slot, moves, n);
+                }
+
+                if (replaying)
+                {
+                    // Replace the command's subtick_moves with the recorded set
+                    // for this tick
+                    SubtickMove out[MotionRecorder::kMaxSubtickPerTick];
+                    int n = MotionRecorder::CurrentReplaySubticks(
+                        slot, out, MotionRecorder::kMaxSubtickPerTick);
+                    base->clear_subtick_moves();
+                    for (int i = 0; i < n; ++i)
+                    {
+                        CSubtickMoveStep *m = base->add_subtick_moves();
+                        m->set_when(out[i].when);
+                        m->set_button(out[i].button);
+                        if (out[i].button != 0) // digital press/release
+                            m->set_pressed(out[i].pressed != 0.0f);
+                        if (out[i].pitchDelta != 0.0f)
+                            m->set_pitch_delta(out[i].pitchDelta);
+                        if (out[i].yawDelta != 0.0f)
+                            m->set_yaw_delta(out[i].yawDelta);
+                        if (out[i].analogForward != 0.0f)
+                            m->set_analog_forward_delta(out[i].analogForward);
+                        if (out[i].analogLeft != 0.0f)
+                            m->set_analog_left_delta(out[i].analogLeft);
+                    }
+                }
+            }
+
+            g_origPlayerRunCommand(services, cmd);
+        }
+
+        // ---- PhysicsSimulate: the per-tick boundary ----
+        // Records pre/post + commits exactly one frame
+
+        static void __fastcall HookedPhysicsSimulate(void *controller)
+        {
+            int slot = ControllerToSlot(controller);
+            void *services = (slot >= 0 && slot < kMaxSlots)
+                                 ? g_slotServices[slot].load(std::memory_order_acquire)
+                                 : nullptr;
+
+            bool recording = slot >= 0 && slot < kMaxSlots && services &&
+                             MotionRecorder::IsRecording(slot);
+            bool replaying = slot >= 0 && slot < kMaxSlots && services &&
+                             MotionRecorder::IsReplaying(slot);
+
+            // pre: snapshot start-of-tick state once (before any subtick mover).
+            if (recording)
+                MotionRecorder::OnCapturePre(slot, services, nullptr);
+
+            g_origPhysicsSimulate(controller);
+
+            // post: snapshot end-of-tick state + commit one frame; advance the
+            // replay cursor once. cmd=nullptr => OnCapturePost reads origin from
+            // the scene node, which now holds this tick's committed end position.
+            if (recording)
+                MotionRecorder::OnCapturePost(slot, services, nullptr);
+            if (replaying)
+                MotionRecorder::OnReplayCommit(slot, services);
+        }
+
+        // CCSPlayer_MovementServices vtable indices (Windows)
+        static constexpr int kVtIdx_PlayerRunCommand = 22;
+        static constexpr int kVtIdx_FinishMove = 35;
+
+        static std::atomic<bool> g_vtHooksTried{false};
+
+        static void EnsureVtableHooks(void *services)
+        {
+            if (g_vtHooksTried.exchange(true, std::memory_order_acq_rel))
+                return;
+            if (!services)
+                return;
+            void **vt = *reinterpret_cast<void ***>(services);
+            if (!vt)
+                return;
+
+            g_addrFinishMove = vt[kVtIdx_FinishMove];
+            if (g_addrFinishMove &&
+                MH_CreateHook(g_addrFinishMove,
+                              reinterpret_cast<void *>(&HookedFinishMove),
+                              reinterpret_cast<void **>(&g_origFinishMove)) == MH_OK)
+                MH_EnableHook(g_addrFinishMove);
+
+            // PlayerRunCommand (subtick record/re-inject)
+            g_addrPlayerRunCommand = vt[kVtIdx_PlayerRunCommand];
+            if (g_addrPlayerRunCommand &&
+                MH_CreateHook(g_addrPlayerRunCommand,
+                              reinterpret_cast<void *>(&HookedPlayerRunCommand),
+                              reinterpret_cast<void **>(&g_origPlayerRunCommand)) == MH_OK &&
+                MH_EnableHook(g_addrPlayerRunCommand) == MH_OK)
+            {
+                g_subtickActive = true;
+            }
+            else if (g_addrPlayerRunCommand)
+            {
+                MH_RemoveHook(g_addrPlayerRunCommand);
+                g_addrPlayerRunCommand = nullptr;
+                g_origPlayerRunCommand = nullptr;
+            }
+
+            char dbg[200];
+            std::snprintf(dbg, sizeof(dbg),
+                          "[BotLocker] vtable hooks: FinishMove @ %p, "
+                          "PlayerRunCommand @ %p (subtick=%d)\n",
+                          g_addrFinishMove, g_addrPlayerRunCommand,
+                          g_subtickActive ? 1 : 0);
+            OutputDebugStringA(dbg);
+        }
+
         static void *ResolveSig(const std::string &gd, HMODULE serverModule,
                                 const char *name,
                                 char *errorOut, size_t errorOutLen)
@@ -175,8 +344,7 @@ namespace BotLocker
             return addr;
         }
 
-        bool Install(const std::string &gamedataPath,
-                     void *serverIface,
+        bool Install(const std::string &gamedataPath, void *serverIface,
                      char *errorOut, size_t errorOutLen)
         {
             HMODULE serverModule = Sig::ModuleFromInterfacePtr(serverIface);
@@ -187,7 +355,6 @@ namespace BotLocker
                 g_status = "failed: no server module";
                 return false;
             }
-
             std::string gd = Sig::ReadFile(gamedataPath);
             if (gd.empty())
             {
@@ -197,42 +364,66 @@ namespace BotLocker
                 return false;
             }
 
-            g_addrProcessUsercmd = ResolveSig(
-                gd, serverModule,
-                "CCSPlayer_MovementServices::ProcessUsercmd",
+            g_addrProcessMovement = ResolveSig(
+                gd, serverModule, "CCSPlayer_MovementServices::ProcessMovement",
                 errorOut, errorOutLen);
-            if (!g_addrProcessUsercmd)
+            if (!g_addrProcessMovement)
             {
-                g_status = "failed: ProcessUsercmd sig";
+                g_status = "failed: ProcessMovement sig";
                 return false;
             }
-
-            if (MH_CreateHook(g_addrProcessUsercmd,
-                              reinterpret_cast<void *>(&HookedProcessUsercmd),
-                              reinterpret_cast<void **>(&g_origProcessUsercmd)) != MH_OK)
+            if (MH_CreateHook(g_addrProcessMovement,
+                              reinterpret_cast<void *>(&HookedProcessMovement),
+                              reinterpret_cast<void **>(&g_origProcessMovement)) != MH_OK)
             {
-                std::snprintf(errorOut, errorOutLen,
-                              "MH_CreateHook ProcessUsercmd failed");
+                std::snprintf(errorOut, errorOutLen, "MH_CreateHook ProcessMovement failed");
                 g_status = "failed: MH_CreateHook";
                 return false;
             }
-            if (MH_EnableHook(g_addrProcessUsercmd) != MH_OK)
+            if (MH_EnableHook(g_addrProcessMovement) != MH_OK)
             {
-                std::snprintf(errorOut, errorOutLen,
-                              "MH_EnableHook ProcessUsercmd failed");
-                MH_RemoveHook(g_addrProcessUsercmd);
-                g_origProcessUsercmd = nullptr;
+                std::snprintf(errorOut, errorOutLen, "MH_EnableHook ProcessMovement failed");
+                MH_RemoveHook(g_addrProcessMovement);
+                g_origProcessMovement = nullptr;
                 g_status = "failed: MH_EnableHook";
                 return false;
             }
 
+            // PhysicsSimulate: the per-tick boundary
+            char psErr[256] = {0};
+            g_addrPhysicsSimulate = ResolveSig(
+                gd, serverModule, "CCSPlayer_MovementServices::PhysicsSimulate",
+                psErr, sizeof(psErr));
+            if (g_addrPhysicsSimulate &&
+                MH_CreateHook(g_addrPhysicsSimulate,
+                              reinterpret_cast<void *>(&HookedPhysicsSimulate),
+                              reinterpret_cast<void **>(&g_origPhysicsSimulate)) == MH_OK &&
+                MH_EnableHook(g_addrPhysicsSimulate) == MH_OK)
+            {
+                g_physicsActive = true;
+            }
+            else
+            {
+                if (g_addrPhysicsSimulate)
+                {
+                    MH_RemoveHook(g_addrPhysicsSimulate);
+                    g_addrPhysicsSimulate = nullptr;
+                }
+                g_origPhysicsSimulate = nullptr;
+                char dbg[320];
+                std::snprintf(dbg, sizeof(dbg),
+                              "[BotLocker] WARN: PhysicsSimulate hook unavailable (%s); "
+                              "replay falls back to per-subtick boundary (may stutter)\n",
+                              psErr[0] ? psErr : "MinHook failed");
+                OutputDebugStringA(dbg);
+            }
+
+            // FinishMove is hooked lazily from the live vtable on the first ProcessMovement tick.
             g_installed = true;
             g_status = "ok";
-
             char dbg[160];
             std::snprintf(dbg, sizeof(dbg),
-                          "[BotLocker] ProcessUsercmd hooked @ %p\n",
-                          g_addrProcessUsercmd);
+                          "[BotLocker] ProcessMovement @ %p\n", g_addrProcessMovement);
             OutputDebugStringA(dbg);
             return true;
         }
@@ -241,10 +432,36 @@ namespace BotLocker
         {
             if (!g_installed)
                 return;
-            MH_DisableHook(g_addrProcessUsercmd);
-            MH_RemoveHook(g_addrProcessUsercmd);
-            g_origProcessUsercmd = nullptr;
-            g_addrProcessUsercmd = nullptr;
+            MH_DisableHook(g_addrProcessMovement);
+            MH_RemoveHook(g_addrProcessMovement);
+            if (g_addrFinishMove)
+            {
+                MH_DisableHook(g_addrFinishMove);
+                MH_RemoveHook(g_addrFinishMove);
+            }
+            if (g_addrPlayerRunCommand)
+            {
+                MH_DisableHook(g_addrPlayerRunCommand);
+                MH_RemoveHook(g_addrPlayerRunCommand);
+            }
+            if (g_addrPhysicsSimulate)
+            {
+                MH_DisableHook(g_addrPhysicsSimulate);
+                MH_RemoveHook(g_addrPhysicsSimulate);
+            }
+            g_origProcessMovement = nullptr;
+            g_origFinishMove = nullptr;
+            g_origPlayerRunCommand = nullptr;
+            g_origPhysicsSimulate = nullptr;
+            g_addrProcessMovement = nullptr;
+            g_addrFinishMove = nullptr;
+            g_addrPlayerRunCommand = nullptr;
+            g_addrPhysicsSimulate = nullptr;
+            g_physicsActive = false;
+            g_subtickActive = false;
+            g_vtHooksTried.store(false, std::memory_order_release);
+            for (auto &s : g_slotServices)
+                s.store(nullptr, std::memory_order_release);
             g_installed = false;
             g_status = "not_attempted";
             ClearAll();
@@ -252,7 +469,7 @@ namespace BotLocker
 
         const char *Status() { return g_status.c_str(); }
 
-        void *ProcessUsercmdAddress() { return g_addrProcessUsercmd; }
+        void *ProcessUsercmdAddress() { return g_addrProcessMovement; }
 
         bool SetInput(int slot, const InjectedInput &input)
         {
@@ -293,23 +510,7 @@ namespace BotLocker
             return n;
         }
 
-        uint64_t HookCallCount()
-        {
-            return g_hookCalls.load(std::memory_order_relaxed);
-        }
-
-        int LastResolvedSlot()
-        {
-            return g_lastSlot.load(std::memory_order_relaxed);
-        }
-
-        // Copy out the last captured pawn snapshot for a slot.
-        bool GetPawnSnapshot(int slot, PawnSnapshot &out)
-        {
-            if (slot < 0 || slot >= kMaxSlots)
-                return false;
-            out = g_snap[slot];
-            return out.valid;
-        }
+        uint64_t HookCallCount() { return g_hookCalls.load(std::memory_order_relaxed); }
+        int LastResolvedSlot() { return g_lastSlot.load(std::memory_order_relaxed); }
     }
 }

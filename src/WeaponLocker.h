@@ -8,9 +8,7 @@ namespace BotLocker
 {
     namespace WeaponLockerHooks
     {
-        // Sentinel def index meaning "any knife" — skin knives (butterfly,
-        // karambit, ...) all have distinct item-def indices the bot won't
-        // carry, so we normalize them to the bot's own slot-2 knife.
+        // Sentinel def index meaning any knife
         constexpr int kKnifeDef = 9001;
 
         bool Install(const std::string &gamedataPath,
@@ -26,11 +24,11 @@ namespace BotLocker
         void *SelectItemAddress();
         void *GetSlotAddress();
 
-        // Force bot at `slot` to its locked weapon. quiet skips DebugLine.
+        // Force bot at `slot` to its locked weapon
         // Returns: 0 ok / 1 no ws / 2 no target / 3 hooks not installed.
         int SwitchToLockTarget(int slot, bool quiet = false);
 
-        // ---- helpers for MotionRecorder (weapon capture/replay) ----
+        // ---- helpers for MotionRecorder ----
 
         // True once GetSlot + SelectItem are resolved and hooks installed.
         bool WeaponHooksReady();

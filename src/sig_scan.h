@@ -1,5 +1,4 @@
-// Sig scanning + gamedata.json loader (flat 2-key schema, no JSON dep).
-// Mirrors CS2-Bot-Vision-Native/src/hooks.cpp's sig logic.
+// Sig scanning + gamedata.json loader
 
 #pragma once
 
@@ -26,7 +25,6 @@ namespace BotLocker::Sig
                         const std::vector<uint8_t> &pattern,
                         const std::vector<bool> &wild);
 
-    // Resolve real CS2 server.dll past Metamod's shim, given any server-side
-    // interface pointer (vtable lives in the real server module).
+    // Resolve real CS2 server.dll
     HMODULE ModuleFromInterfacePtr(void *interfacePtr);
 }

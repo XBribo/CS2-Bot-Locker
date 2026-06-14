@@ -11,10 +11,10 @@ namespace BotLocker
     // Mirror BotLockerApi.LockKind on the C# side.
     enum class LockKind : int
     {
-        All    = 0,
-        Aim    = 1,
+        All = 0,
+        Aim = 1,
         Weapon = 2,
-        Jump   = 3,
+        Jump = 3,
     };
 
     namespace Dispatch

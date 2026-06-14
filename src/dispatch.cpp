@@ -20,27 +20,32 @@ namespace BotLocker
             switch (kind)
             {
             case LockKind::All:
-                if (slot < 0 || slot >= BotLockerState::kMaxSlots) return -2;
+                if (slot < 0 || slot >= BotLockerState::kMaxSlots)
+                    return -2;
                 BotLockerState::SetAll(slot, true);
                 return 0;
 
             case LockKind::Aim:
-                if (slot < 0 || slot >= BotLockerState::kMaxSlots) return -2;
+                if (slot < 0 || slot >= BotLockerState::kMaxSlots)
+                    return -2;
                 BotLockerState::SetAim(slot, true);
                 return 0;
 
             case LockKind::Weapon:
             {
-                if (slot < 0 || slot >= WeaponLockerState::kMaxSlots) return -2;
+                if (slot < 0 || slot >= WeaponLockerState::kMaxSlots)
+                    return -2;
                 const auto tgt = static_cast<LockTarget>(arg);
-                if (tgt == LockTarget::None) return -2;
+                if (tgt == LockTarget::None)
+                    return -2;
                 WeaponLockerState::Set(slot, tgt);
                 (void)WeaponLockerHooks::SwitchToLockTarget(slot, quiet);
                 return 0;
             }
 
             case LockKind::Jump:
-                if (slot < 0 || slot >= BotLockerState::kMaxSlots) return -2;
+                if (slot < 0 || slot >= BotLockerState::kMaxSlots)
+                    return -2;
                 BotLockerState::SetJump(slot, true);
                 return 0;
             }
@@ -53,22 +58,26 @@ namespace BotLocker
             switch (kind)
             {
             case LockKind::All:
-                if (slot < 0 || slot >= BotLockerState::kMaxSlots) return -2;
+                if (slot < 0 || slot >= BotLockerState::kMaxSlots)
+                    return -2;
                 BotLockerState::SetAll(slot, false);
                 return 0;
 
             case LockKind::Aim:
-                if (slot < 0 || slot >= BotLockerState::kMaxSlots) return -2;
+                if (slot < 0 || slot >= BotLockerState::kMaxSlots)
+                    return -2;
                 BotLockerState::SetAim(slot, false);
                 return 0;
 
             case LockKind::Weapon:
-                if (slot < 0 || slot >= WeaponLockerState::kMaxSlots) return -2;
+                if (slot < 0 || slot >= WeaponLockerState::kMaxSlots)
+                    return -2;
                 WeaponLockerState::Clear(slot);
                 return 0;
 
             case LockKind::Jump:
-                if (slot < 0 || slot >= BotLockerState::kMaxSlots) return -2;
+                if (slot < 0 || slot >= BotLockerState::kMaxSlots)
+                    return -2;
                 BotLockerState::SetJump(slot, false);
                 return 0;
             }
@@ -80,10 +89,18 @@ namespace BotLocker
         {
             switch (kind)
             {
-            case LockKind::All:    BotLockerState::ClearAllAll(); return 0;
-            case LockKind::Aim:    BotLockerState::ClearAllAim(); return 0;
-            case LockKind::Weapon: WeaponLockerState::ClearAll(); return 0;
-            case LockKind::Jump:   BotLockerState::ClearAllJump(); return 0;
+            case LockKind::All:
+                BotLockerState::ClearAllAll();
+                return 0;
+            case LockKind::Aim:
+                BotLockerState::ClearAllAim();
+                return 0;
+            case LockKind::Weapon:
+                WeaponLockerState::ClearAll();
+                return 0;
+            case LockKind::Jump:
+                BotLockerState::ClearAllJump();
+                return 0;
             }
             return -2;
         }

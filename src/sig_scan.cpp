@@ -1,5 +1,4 @@
 // Sig scanning + gamedata.json loader.
-// Copied + adapted from CS2-Bot-Vision-Native/src/hooks.cpp.
 
 #include "sig_scan.h"
 
@@ -14,7 +13,8 @@ namespace BotLocker::Sig
     std::string ReadFile(const std::string &path)
     {
         std::ifstream f(path, std::ios::binary);
-        if (!f) return "";
+        if (!f)
+            return "";
         std::stringstream ss;
         ss << f.rdbuf();
         return ss.str();
@@ -25,17 +25,23 @@ namespace BotLocker::Sig
     {
         std::string quoted = "\"" + name + "\"";
         size_t k = text.find(quoted);
-        if (k == std::string::npos) return "";
+        if (k == std::string::npos)
+            return "";
         size_t sigKey = text.find("\"signatures\"", k);
-        if (sigKey == std::string::npos) return "";
+        if (sigKey == std::string::npos)
+            return "";
         size_t winKey = text.find("\"windows\"", sigKey);
-        if (winKey == std::string::npos) return "";
+        if (winKey == std::string::npos)
+            return "";
         size_t colon = text.find(':', winKey);
-        if (colon == std::string::npos) return "";
+        if (colon == std::string::npos)
+            return "";
         size_t q1 = text.find('"', colon + 1);
-        if (q1 == std::string::npos) return "";
+        if (q1 == std::string::npos)
+            return "";
         size_t q2 = text.find('"', q1 + 1);
-        if (q2 == std::string::npos) return "";
+        if (q2 == std::string::npos)
+            return "";
         return text.substr(q1 + 1, q2 - q1 - 1);
     }
 
@@ -55,10 +61,12 @@ namespace BotLocker::Sig
                 outWild.push_back(true);
                 continue;
             }
-            if (tok.size() == 0 || tok.size() > 2) return false;
+            if (tok.size() == 0 || tok.size() > 2)
+                return false;
             char *end = nullptr;
             unsigned long v = std::strtoul(tok.c_str(), &end, 16);
-            if (end == tok.c_str() || *end != '\0' || v > 0xFF) return false;
+            if (end == tok.c_str() || *end != '\0' || v > 0xFF)
+                return false;
             outBytes.push_back(static_cast<uint8_t>(v));
             outWild.push_back(false);
         }
@@ -80,20 +88,28 @@ namespace BotLocker::Sig
             bool match = true;
             for (size_t j = 0; j < plen; ++j)
             {
-                if (!wild[j] && base[i + j] != pattern[j]) { match = false; break; }
+                if (!wild[j] && base[i + j] != pattern[j])
+                {
+                    match = false;
+                    break;
+                }
             }
-            if (match) return base + i;
+            if (match)
+                return base + i;
         }
         return nullptr;
     }
 
     HMODULE ModuleFromInterfacePtr(void *interfacePtr)
     {
-        if (!interfacePtr) return nullptr;
+        if (!interfacePtr)
+            return nullptr;
         void *vtable = *reinterpret_cast<void **>(interfacePtr);
         MEMORY_BASIC_INFORMATION mbi{};
-        if (!VirtualQuery(vtable, &mbi, sizeof(mbi))) return nullptr;
-        if (mbi.Type != MEM_IMAGE) return nullptr;
+        if (!VirtualQuery(vtable, &mbi, sizeof(mbi)))
+            return nullptr;
+        if (mbi.Type != MEM_IMAGE)
+            return nullptr;
         return reinterpret_cast<HMODULE>(mbi.AllocationBase);
     }
 }

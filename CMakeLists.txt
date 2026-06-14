@@ -19,8 +19,8 @@ foreach(v HL2SDK MMS PROTO_DIR)
     endif()
 endforeach()
 
-# eiface.h includes network_connection.pb.h; we only need the generated
-# header to exist (no symbols used directly).
+# eiface.h needs network_connection.pb.h; the usercmd protos give us
+# CSGOUserCmdPB / CSubtickMoveStep for §8 subtick record + replay.
 if(DEFINED ENV{PROTOC} AND EXISTS "$ENV{PROTOC}")
     set(PROTOC_EXE "$ENV{PROTOC}")
 else()
@@ -32,7 +32,7 @@ if(NOT PROTOC_VER MATCHES "libprotoc 3\\.21\\.")
 endif()
 message(STATUS "protoc: ${PROTOC_EXE} (${PROTOC_VER})")
 
-set(PROTO_FILES network_connection.proto)
+set(PROTO_FILES network_connection.proto networkbasetypes.proto usercmd.proto cs_usercmd.proto)
 set(GENERATED_DIR "${CMAKE_BINARY_DIR}/generated")
 file(MAKE_DIRECTORY "${GENERATED_DIR}")
 set(PROTO_SRCS "")
@@ -46,9 +46,13 @@ endforeach()
 add_custom_command(
     OUTPUT ${PROTO_SRCS}
     COMMAND "${PROTOC_EXE}" --cpp_out=${GENERATED_DIR} --proto_path=${PROTO_DIR} ${PROTO_FILES}
+    # protoc 3.21 emits `class X final : public Message`; strip the class-def
+    # `final` so PlayerCommand (playercommand.h) can inherit CSGOUserCmdPB.
+    # final is only a devirtualization hint -- no layout/ABI impact.
+    COMMAND powershell -NoProfile -Command "Get-ChildItem '${GENERATED_DIR}/*.pb.h' | ForEach-Object { (Get-Content -Raw $_) -replace ' final :',' :' | Set-Content -NoNewline $_ }"
     DEPENDS ${PROTO_INPUTS}
     WORKING_DIRECTORY "${PROTO_DIR}"
-    COMMENT "protoc ${PROTO_FILES}"
+    COMMENT "protoc ${PROTO_FILES} (+ strip class final)"
     VERBATIM
 )
 

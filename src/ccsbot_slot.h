@@ -8,8 +8,8 @@ namespace BotLocker
     struct SlotResolution
     {
         void *pawn;
-        int   pawnEntIndex;
-        int   slot;          // -1 on failure
+        int pawnEntIndex;
+        int slot; // -1 on failure
     };
 
     // Returns slot in [0, 63] on success, or -1 if the pointer doesn't look
@@ -19,7 +19,10 @@ namespace BotLocker
     // Full diagnostic version returning intermediate values.
     SlotResolution ResolveSlot(void *bot);
 
-    // pawn->m_hController only, no m_hOriginalController fallback (used to
-    // detect human takeover).
+    // pawn->m_hController only, no m_hOriginalController fallback
+    // used to detect human takeover
     int ControllerSlotForPawn(void *pawn);
+
+    // CCSPlayerController* (PhysicsSimulate arg0) -> slot via its own ehandle.
+    int ControllerToSlot(void *controller);
 }

@@ -86,10 +86,10 @@ namespace BotLocker
         static void __fastcall HookedSetEyeAngles(void *pawn, float *angle)
         {
             int slot = pawn ? ControllerSlotForPawn(pawn) : -1;
-            ReplayFrame f{};
-            if (slot >= 0 && MotionRecorder::CurrentReplayFrame(slot, f))
+            ReplayTick t{};
+            if (slot >= 0 && MotionRecorder::CurrentReplayTick(slot, t))
             {
-                float a[3] = {f.pitch, f.yaw, 0.0f};
+                float a[3] = {t.post.pitch, t.post.yaw, 0.0f};
                 g_origSetEyeAngles(pawn, a);
                 return;
             }

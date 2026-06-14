@@ -43,23 +43,46 @@ namespace BotLocker
         // Parse kind string into LockKind.
         static bool ParseKind(const char *s, LockKind &out)
         {
-            if (!s) return false;
-            if (std::strcmp(s, "all")    == 0) { out = LockKind::All;    return true; }
-            if (std::strcmp(s, "aim")    == 0) { out = LockKind::Aim;    return true; }
-            if (std::strcmp(s, "weapon") == 0) { out = LockKind::Weapon; return true; }
-            if (std::strcmp(s, "jump")   == 0) { out = LockKind::Jump;   return true; }
+            if (!s)
+                return false;
+            if (std::strcmp(s, "all") == 0)
+            {
+                out = LockKind::All;
+                return true;
+            }
+            if (std::strcmp(s, "aim") == 0)
+            {
+                out = LockKind::Aim;
+                return true;
+            }
+            if (std::strcmp(s, "weapon") == 0)
+            {
+                out = LockKind::Weapon;
+                return true;
+            }
+            if (std::strcmp(s, "jump") == 0)
+            {
+                out = LockKind::Jump;
+                return true;
+            }
             return false;
         }
 
         // Parse "slotN" into LockTarget.
         static LockTarget ParseTarget(const char *s)
         {
-            if (!s) return LockTarget::None;
-            if (std::strcmp(s, "slot1") == 0) return LockTarget::Slot1;
-            if (std::strcmp(s, "slot2") == 0) return LockTarget::Slot2;
-            if (std::strcmp(s, "slot3") == 0) return LockTarget::Slot3;
-            if (std::strcmp(s, "slot4") == 0) return LockTarget::Slot4;
-            if (std::strcmp(s, "slot5") == 0) return LockTarget::Slot5;
+            if (!s)
+                return LockTarget::None;
+            if (std::strcmp(s, "slot1") == 0)
+                return LockTarget::Slot1;
+            if (std::strcmp(s, "slot2") == 0)
+                return LockTarget::Slot2;
+            if (std::strcmp(s, "slot3") == 0)
+                return LockTarget::Slot3;
+            if (std::strcmp(s, "slot4") == 0)
+                return LockTarget::Slot4;
+            if (std::strcmp(s, "slot5") == 0)
+                return LockTarget::Slot5;
             return LockTarget::None;
         }
 
@@ -67,12 +90,18 @@ namespace BotLocker
         {
             switch (t)
             {
-            case LockTarget::Slot1: return "slot1";
-            case LockTarget::Slot2: return "slot2";
-            case LockTarget::Slot3: return "slot3";
-            case LockTarget::Slot4: return "slot4";
-            case LockTarget::Slot5: return "slot5";
-            default: return "none";
+            case LockTarget::Slot1:
+                return "slot1";
+            case LockTarget::Slot2:
+                return "slot2";
+            case LockTarget::Slot3:
+                return "slot3";
+            case LockTarget::Slot4:
+                return "slot4";
+            case LockTarget::Slot5:
+                return "slot5";
+            default:
+                return "none";
             }
         }
 
@@ -80,10 +109,14 @@ namespace BotLocker
         {
             switch (k)
             {
-            case LockKind::All:    return "all";
-            case LockKind::Aim:    return "aim";
-            case LockKind::Weapon: return "weapon";
-            case LockKind::Jump:   return "jump";
+            case LockKind::All:
+                return "all";
+            case LockKind::Aim:
+                return "aim";
+            case LockKind::Weapon:
+                return "weapon";
+            case LockKind::Jump:
+                return "jump";
             }
             return "?";
         }
@@ -100,7 +133,7 @@ CON_COMMAND_F(bl_lock,
     if (args.ArgC() < 3)
     {
         Commands::PrintToCaller(context,
-            "usage: bl_lock <all|aim|jump|weapon> <slot> [slot1..slot5]\n");
+                                "usage: bl_lock <all|aim|jump|weapon> <slot> [slot1..slot5]\n");
         return;
     }
 
@@ -108,7 +141,7 @@ CON_COMMAND_F(bl_lock,
     if (!Commands::ParseKind(args.Arg(1), kind))
     {
         Commands::PrintToCaller(context,
-            "[BL] error: kind must be all|aim|jump|weapon\n");
+                                "[BL] error: kind must be all|aim|jump|weapon\n");
         return;
     }
 
@@ -120,14 +153,14 @@ CON_COMMAND_F(bl_lock,
         if (args.ArgC() < 4)
         {
             Commands::PrintToCaller(context,
-                "usage: bl_lock weapon <slot> <slot1..slot5>\n");
+                                    "usage: bl_lock weapon <slot> <slot1..slot5>\n");
             return;
         }
         const auto tgt = Commands::ParseTarget(args.Arg(3));
         if (tgt == LockTarget::None)
         {
             Commands::PrintToCaller(context,
-                "[BL] error: weapon target must be slot1..slot5\n");
+                                    "[BL] error: weapon target must be slot1..slot5\n");
             return;
         }
         arg = static_cast<int>(tgt);
@@ -138,16 +171,16 @@ CON_COMMAND_F(bl_lock,
     {
         if (kind == LockKind::Weapon)
             Commands::PrintToCaller(context,
-                "[BL] locked slot %d weapon -> %s\n", slot,
-                Commands::TargetName(static_cast<LockTarget>(arg)));
+                                    "[BL] locked slot %d weapon -> %s\n", slot,
+                                    Commands::TargetName(static_cast<LockTarget>(arg)));
         else
             Commands::PrintToCaller(context,
-                "[BL] locked slot %d (%s)\n", slot, Commands::KindName(kind));
+                                    "[BL] locked slot %d (%s)\n", slot, Commands::KindName(kind));
     }
     else
     {
         Commands::PrintToCaller(context,
-            "[BL] error: lock failed (rc=%d)\n", rc);
+                                "[BL] error: lock failed (rc=%d)\n", rc);
     }
 }
 
@@ -160,7 +193,7 @@ CON_COMMAND_F(bl_unlock,
     if (args.ArgC() < 3)
     {
         Commands::PrintToCaller(context,
-            "usage: bl_unlock <all|aim|jump|weapon> <slot>\n");
+                                "usage: bl_unlock <all|aim|jump|weapon> <slot>\n");
         return;
     }
 
@@ -168,7 +201,7 @@ CON_COMMAND_F(bl_unlock,
     if (!Commands::ParseKind(args.Arg(1), kind))
     {
         Commands::PrintToCaller(context,
-            "[BL] error: kind must be all|aim|jump|weapon\n");
+                                "[BL] error: kind must be all|aim|jump|weapon\n");
         return;
     }
 
@@ -176,10 +209,10 @@ CON_COMMAND_F(bl_unlock,
     int rc = Dispatch::Unlock(slot, kind);
     if (rc == 0)
         Commands::PrintToCaller(context,
-            "[BL] unlocked slot %d (%s)\n", slot, Commands::KindName(kind));
+                                "[BL] unlocked slot %d (%s)\n", slot, Commands::KindName(kind));
     else
         Commands::PrintToCaller(context,
-            "[BL] error: unlock failed (rc=%d)\n", rc);
+                                "[BL] error: unlock failed (rc=%d)\n", rc);
 }
 
 CON_COMMAND_F(bl_unlock_all,
@@ -191,7 +224,7 @@ CON_COMMAND_F(bl_unlock_all,
     if (args.ArgC() < 2)
     {
         Commands::PrintToCaller(context,
-            "usage: bl_unlock_all <all|aim|jump|weapon>\n");
+                                "usage: bl_unlock_all <all|aim|jump|weapon>\n");
         return;
     }
 
@@ -199,17 +232,17 @@ CON_COMMAND_F(bl_unlock_all,
     if (!Commands::ParseKind(args.Arg(1), kind))
     {
         Commands::PrintToCaller(context,
-            "[BL] error: kind must be all|aim|jump|weapon\n");
+                                "[BL] error: kind must be all|aim|jump|weapon\n");
         return;
     }
 
     int rc = Dispatch::UnlockAll(kind);
     if (rc == 0)
         Commands::PrintToCaller(context,
-            "[BL] unlocked all (%s)\n", Commands::KindName(kind));
+                                "[BL] unlocked all (%s)\n", Commands::KindName(kind));
     else
         Commands::PrintToCaller(context,
-            "[BL] error: unlock_all failed (rc=%d)\n", rc);
+                                "[BL] error: unlock_all failed (rc=%d)\n", rc);
 }
 
 CON_COMMAND_F(bl_status,
@@ -220,29 +253,29 @@ CON_COMMAND_F(bl_status,
 
     // Hooks
     Commands::PrintToCaller(context,
-        "[BL] weapon hooks: %s | EquipBest=%p EquipPistol=%p SelectItem=%p GetSlot=%p\n",
-        WeaponLockerHooks::Status(),
-        WeaponLockerHooks::EquipBestWeaponAddress(),
-        WeaponLockerHooks::EquipPistolAddress(),
-        WeaponLockerHooks::SelectItemAddress(),
-        WeaponLockerHooks::GetSlotAddress());
+                            "[BL] weapon hooks: %s | EquipBest=%p EquipPistol=%p SelectItem=%p GetSlot=%p\n",
+                            WeaponLockerHooks::Status(),
+                            WeaponLockerHooks::EquipBestWeaponAddress(),
+                            WeaponLockerHooks::EquipPistolAddress(),
+                            WeaponLockerHooks::SelectItemAddress(),
+                            WeaponLockerHooks::GetSlotAddress());
 
     Commands::PrintToCaller(context,
-        "[BL] bot hooks:    %s | Update=%p Upkeep=%p Jump=%p\n",
-        BotLockerHooks::Status(),
-        BotLockerHooks::UpdateAddress(),
-        BotLockerHooks::UpkeepAddress(),
-        BotLockerHooks::JumpAddress());
+                            "[BL] bot hooks:    %s | Update=%p Upkeep=%p Jump=%p\n",
+                            BotLockerHooks::Status(),
+                            BotLockerHooks::UpdateAddress(),
+                            BotLockerHooks::UpkeepAddress(),
+                            BotLockerHooks::JumpAddress());
 
     Commands::PrintToCaller(context,
-        "[BL] input inject: %s | ProcessUsercmd=%p\n",
-        InputInjector::Status(),
-        InputInjector::ProcessUsercmdAddress());
+                            "[BL] input inject: %s | ProcessUsercmd=%p\n",
+                            InputInjector::Status(),
+                            InputInjector::ProcessUsercmdAddress());
 
     Commands::PrintToCaller(context,
-        "[BL] usercmd hook fired: %llu times | last slot=%d\n",
-        (unsigned long long)InputInjector::HookCallCount(),
-        InputInjector::LastResolvedSlot());
+                            "[BL] usercmd hook fired: %llu times | last slot=%d\n",
+                            (unsigned long long)InputInjector::HookCallCount(),
+                            InputInjector::LastResolvedSlot());
 
     // All lock
     int nAll = BotLockerState::CountAll();
@@ -297,56 +330,4 @@ CON_COMMAND_F(bl_status,
             if (InputInjector::IsActive(s))
                 Commands::PrintToCaller(context, "[BL]   inject slot %2d\n", s);
     }
-}
-
-CON_COMMAND_F(bl_inject,
-              "bl_inject <slot> <forward> <side> <yaw> [buttons]  "
-              "Test ProcessUsercmd injection on a bot.",
-              FCVAR_NONE)
-{
-    using namespace BotLocker;
-
-    if (args.ArgC() < 5)
-    {
-        Commands::PrintToCaller(context,
-            "usage: bl_inject <slot> <forward> <side> <yaw> [buttons]\n");
-        return;
-    }
-
-    const int      slot    = std::atoi(args.Arg(1));
-    const float    forward = (float)std::atof(args.Arg(2));
-    const float    side    = (float)std::atof(args.Arg(3));
-    const float    yaw     = (float)std::atof(args.Arg(4));
-    const uint64_t buttons = args.ArgC() >= 6
-        ? std::strtoull(args.Arg(5), nullptr, 0) : 0;
-
-    // upMove/pitch unused for ground-walk test.
-    InjectedInput in{buttons, forward, side, 0.0f, 0.0f, yaw};
-    if (InputInjector::SetInput(slot, in))
-        Commands::PrintToCaller(context,
-            "[BL] inject slot %d: fwd=%.1f side=%.1f yaw=%.1f buttons=%llu\n",
-            slot, forward, side, yaw, (unsigned long long)buttons);
-    else
-        Commands::PrintToCaller(context,
-            "[BL] error: inject failed (slot out of range)\n");
-}
-
-CON_COMMAND_F(bl_inject_clear,
-              "bl_inject_clear <slot>  Stop injecting UserCmd for a bot.",
-              FCVAR_NONE)
-{
-    using namespace BotLocker;
-
-    if (args.ArgC() < 2)
-    {
-        Commands::PrintToCaller(context, "usage: bl_inject_clear <slot>\n");
-        return;
-    }
-
-    const int slot = std::atoi(args.Arg(1));
-    if (InputInjector::ClearInput(slot))
-        Commands::PrintToCaller(context, "[BL] inject cleared slot %d\n", slot);
-    else
-        Commands::PrintToCaller(context,
-            "[BL] error: clear failed (slot out of range)\n");
 }

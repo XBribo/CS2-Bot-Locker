@@ -12,7 +12,7 @@ It can be installed on win64 clients.
 
 ## Your stars⭐ are my motivation to keep updating
 
-**Version**: 0.4.0 · **ABI**: 8
+**Version**: 0.5.0 · **ABI**: 9
 
 ------------------------------------------------------------------------
 

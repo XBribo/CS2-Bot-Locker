@@ -33,10 +33,10 @@ public:
 
     const char *GetAuthor() override { return "XBribo(๑•.•๑)"; }
     const char *GetName() override { return "BotLocker"; }
-    const char *GetDescription() override { return "Lock CS2 bots: freeze AI tick and/or pin to a weapon slot."; }
+    const char *GetDescription() override { return "Lock and Record CS2 bots."; }
     const char *GetURL() override { return ""; }
     const char *GetLicense() override { return "GPLv3"; }
-    const char *GetVersion() override { return "0.3.2"; }
+    const char *GetVersion() override { return "0.5.0"; }
     const char *GetDate() override { return __DATE__; }
     const char *GetLogTag() override { return "BL"; }
 };
@@ -54,7 +54,7 @@ static HMODULE GetSelfModule()
     return mod;
 }
 
-// .../addons/BotLocker/bin/win64/BotLocker.dll -> .../addons/BotLocker/gamedata.json
+// gamedata.json
 static std::string ComputeGamedataPath()
 {
     char path[MAX_PATH] = {0};
@@ -89,8 +89,7 @@ bool BotLockerPlugin::Load(PluginId id, ISmmAPI *ismm,
     }
     ConVar_Register(FCVAR_RELEASE | FCVAR_GAMEDLL);
 
-    // The dispatch path needs IVEngineServer2::ClientCommand to inject a
-    // slotN command into the engine's concommand pipeline.
+    // IVEngineServer2::ClientCommand
     BotLocker::Dispatch::g_pEngine = static_cast<IVEngineServer2 *>(
         ismm->GetEngineFactory()(INTERFACEVERSION_VENGINESERVER, nullptr));
     if (!BotLocker::Dispatch::g_pEngine)
@@ -101,8 +100,7 @@ bool BotLockerPlugin::Load(PluginId id, ISmmAPI *ismm,
         return false;
     }
 
-    // Need ISource2GameClients only as the anchor for sig-scan: its vtable
-    // lives in the real server.dll past Metamod's shim.
+    // Need ISource2GameClients only as the anchor for sig-scan
     void *serverIface =
         ismm->GetServerFactory()(INTERFACEVERSION_SERVERGAMECLIENTS, nullptr);
     if (!serverIface)
@@ -115,9 +113,6 @@ bool BotLockerPlugin::Load(PluginId id, ISmmAPI *ismm,
 
     // Engine interface used by console command output (ClientPrintf).
     BotLocker::Commands::g_pEngine = BotLocker::Dispatch::g_pEngine;
-
-    // Same interface doubles as the "real server.dll" anchor for sig-scan.
-    // (serverIface already grabbed above.)
 
     std::string gamedataPath = ComputeGamedataPath();
     if (gamedataPath.empty())

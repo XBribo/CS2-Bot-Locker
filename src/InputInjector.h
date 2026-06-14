@@ -1,6 +1,4 @@
-// MinHook for CCSPlayer_MovementServices::ProcessUsercmd.
-// Lets the host plugin override per-slot UserCmd input (buttons/move/view),
-// e.g. to drive a bot from external code such as demo replay.
+// MinHook for CS2 movement functions (ProcessMovement / PhysicsSimulate / FinishMove / PlayerRunCommand)
 
 #pragma once
 
@@ -55,16 +53,5 @@ namespace BotLocker
         // Diagnostics
         uint64_t HookCallCount();
         int LastResolvedSlot();
-
-        // Per-slot pawn-state snapshot captured each ProcessUsercmd tick
-        struct PawnSnapshot
-        {
-            bool valid;
-            float velX, velY, velZ;           // m_vecAbsVelocity
-            uint32_t flags;                   // m_fFlags (bit0 = FL_ONGROUND)
-            float cmdForward, cmdSide, cmdUp; // cmd move fields this tick
-            float cmdPitch, cmdYaw;           // cmd view fields this tick
-        };
-        bool GetPawnSnapshot(int slot, PawnSnapshot &out);
     }
 }

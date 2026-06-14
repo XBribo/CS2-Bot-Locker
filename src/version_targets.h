@@ -1,7 +1,4 @@
 // version_targets.h
-//
-// Single source of truth for every reverse-engineered offset referenced by
-// the plugin. Grouped by the engine class each offset belongs to.
 
 #pragma once
 
@@ -13,12 +10,6 @@ namespace cs2bl::targets
     inline constexpr int kBot_AiTickedFlag = 21196;
     // CCSBot -> pawn (CCSPlayerPawn*)
     inline constexpr int kBot_Pawn = 0x18;
-    // Look-angle spring targets (m_lookPitch/m_lookYaw) + their velocities,
-    // as read by CCSBot::UpdateLookAngles. Unused by 1:1 view replay.
-    inline constexpr int kBot_LookPitch = 0x5974;
-    inline constexpr int kBot_LookPitchVel = 0x5978;
-    inline constexpr int kBot_LookYaw = 0x597C;
-    inline constexpr int kBot_LookYawVel = 0x5980;
 
     // ---- CBaseEntity / CEntityIdentity ----
 
@@ -26,12 +17,16 @@ namespace cs2bl::targets
     inline constexpr int kEnt_Identity = 0x10;
     // CEntityIdentity -> m_EHandle (low 15 bits = entity index)
     inline constexpr int kEntIdentity_EHandle = 0x10;
+    // m_MoveType (MoveType_t, 1 byte) — restored each replay tick for §8
+    inline constexpr int kEnt_MoveType = 0x2F3;
     // m_fFlags (bit0 = FL_ONGROUND)
     inline constexpr int kEnt_Flags = 0x388;
     // m_vecAbsVelocity
     inline constexpr int kEnt_AbsVelocity = 0x38C;
-    // m_vecVelocity
-    inline constexpr int kEnt_Velocity = 0x398;
+    // entity -> m_pGameSceneNode -> m_vecAbsOrigin (world pos), written each
+    // replay tick (direct write, not Teleport, to keep client interp smooth)
+    inline constexpr int kEnt_GameSceneNode = 0x270;
+    inline constexpr int kNode_AbsOrigin = 0xC8;
 
     // ---- CCSPlayerPawn ----
 
@@ -43,9 +38,8 @@ namespace cs2bl::targets
     inline constexpr int kPawn_OriginalController = 0xB84;
     // CCSPlayerPawn -> v_angle (QAngle)
     inline constexpr int kPawn_ViewAngle = 0xAB8;
-    // CCSPlayerPawn vtable byte offset of GetEyeAngles(QAngle &out); from
-    // UpdateLookAngles decomp (vtable+1504). Index = 1504/8 = 188.
-    inline constexpr int kPawnVt_GetEyeAngles = 1504;
+    // m_angEyeAngles (QAngle) — written each replay tick alongside v_angle
+    inline constexpr int kPawn_EyeAngles = 0x1340;
 
     // ---- CCSPlayer_WeaponServices ----
 
@@ -65,16 +59,18 @@ namespace cs2bl::targets
     // m_nButtons button mask
     inline constexpr int kServices_Buttons = 88;
 
+    // ---- CMoveData (mover working copy, a2 in WalkMove/AirMove) ----
+
+    // m_vecVelocity — the velocity TryPlayerMove integrates into origin
+    inline constexpr int kMove_Velocity = 56;
+    // m_vecAbsOrigin — post-move origin written here before FinishMove commits
+    // it to the entity (§8). SDK struct offset, re-verify on engine update.
+    inline constexpr int kMove_AbsOrigin = 200;
+
     // ---- CUserCmd ----
 
     inline constexpr int kCmd_ForwardMove = 44;
     inline constexpr int kCmd_SideMove = 48;
     inline constexpr int kCmd_UpMove = 52;
-    inline constexpr int kCmd_ViewPitch = 68;
-    inline constexpr int kCmd_ViewYaw = 72;
-    inline constexpr int kCmd_ViewRoll = 76;
-    inline constexpr int kCmd_ViewPitchInput = 244;
-    inline constexpr int kCmd_ViewYawInput = 248;
-    inline constexpr int kCmd_ViewRollInput = 252;
 
 } // namespace cs2bl::targets
